@@ -5,21 +5,33 @@ from .models import Tenant, Organization, Department, Customer
 class TenantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
-        fields = ['tenant_id', 'name', 'domain']
-        read_only_fields = ['tenant_id']
+        fields = ['id', 'name', 'domain']
+        read_only_fields = ['id']
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
-    tenant = TenantSerializer()
 
     class Meta:
         model = Organization
         fields = ['id', 'name', 'tenant']
         read_only_fields = ['id']
-
+    
+    def create(self, validated_data):
+        # Pobierz tenant z requestu i przypisz go do organizacji
+        tenant = self.context['request'].tenant
+        if not tenant:
+            raise serializers.ValidationError("No active tenant found.")
+        validated_data['tenant'] = tenant
+        return super().create(validated_data)
 
 class DepartmentSerializer(serializers.ModelSerializer):
-    organization = OrganizationSerializer()
+    organization = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.all(),
+        error_messages={
+            'does_not_exist': 'Organization with this ID does not exist.',
+            'invalid': 'Invalid tenant ID.',
+        }
+    )
 
     class Meta:
         model = Department
@@ -28,7 +40,13 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 
 class CustomerSerializer(serializers.ModelSerializer):
-    department = DepartmentSerializer()
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(),
+        error_messages={
+            'does_not_exist': 'Departament with this ID does not exist.',
+            'invalid': 'Invalid tenant ID.',
+        }
+    )
 
     class Meta:
         model = Customer
